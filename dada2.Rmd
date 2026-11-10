@@ -1,0 +1,508 @@
+---
+title: "R Notebook"
+---
+
+
+```{r}
+library(dada2);
+library(ShortRead);
+library(ggplot2);
+library(tidyverse);
+
+```
+
+
+```{r}
+##SET PATH, FILES AND SAMPLE.NAMES
+path <- "/SERVER/sequences/pozzuoli/16s/RisultatiAmalfitanoYellow/fastq" # CHANGE ME to the directory containing the fastq files
+head(list.files(path)) #list files in this folder
+```
+
+
+
+```{r}
+## Get Files only for Samples of interest ##
+
+fnFs <- sort(list.files(path, pattern="_L001_R1_001.fastq.gz", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern="_L001_R2_001.fastq.gz", full.names = TRUE))
+
+
+# Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
+sample.names <- sapply(strsplit(basename(fnFs), "-"), `[`, 2)
+sample.names
+```
+
+
+```{r}
+
+##COUNT NUMBER OF READS IN EACH SAMPLE BEFORE FILTERING 
+raw_reads_count <- NULL #Creates an empty object
+
+for (i in 1:length(fnFs)){ #loop over fnFs to count number of sequences with length over readFastq
+
+  raw_reads_count <- rbind(raw_reads_count, length(ShortRead::readFastq(fnFs[i])))
+}
+
+#Format table to give it sample.names
+rownames(raw_reads_count)<- sample.names
+colnames(raw_reads_count)<- "Number of reads"
+
+```
+
+
+```{r}
+#Get min and max number of sequences
+min(raw_reads_count)
+```
+
+```{r}
+max(raw_reads_count)
+```
+
+```{r}
+#plot the distribution of sequences length with a histogram.
+##Histogram of sequences length
+
+reads <- ShortRead::readFastq(fnFs) #store sequences in an R object
+
+#Get lengths with unique
+uniques <- unique(reads@quality@quality@ranges@width) #get length accessing to width attribute within reads
+
+#Count number of sequences for each length
+counts <- NULL #Creates a null object for storing counts
+for (i in 1:length(uniques)) {
+  counts<- rbind(counts,length(which(reads@quality@quality@ranges@width==uniques[i])))
+
+}
+
+#format histogram table
+histogram_fnFs <-  cbind(uniques,counts)
+colnames(histogram_fnFs) <- c("Seq.length", "counts")
+
+```
+
+
+
+```{r}
+histogram_fnFs <- histogram_fnFs[order(histogram_fnFs[, 1], decreasing = TRUE), ]
+
+sum(histogram_fnFs[histogram_fnFs[,1] >= 290, 2])
+
+head(histogram_fnFs[histogram_fnFs[,1] >= 200, ], 10)
+
+# histogram_fnFs
+```
+
+
+
+
+
+```{r}
+#plot the distribution of sequences length with a histogram.
+##Histogram of sequences length
+
+reads <- ShortRead::readFastq(fnRs) #store sequences in an R object
+
+#Get lengths with unique
+uniques <- unique(reads@quality@quality@ranges@width) #get length accessing to width attribute within reads
+
+#Count number of sequences for each length
+counts <- NULL #Creates a null object for storing counts
+for (i in 1:length(uniques)) {
+  counts<- rbind(counts,length(which(reads@quality@quality@ranges@width==uniques[i])))
+
+}
+
+#format histogram table
+histogram_fnRs <-  cbind(uniques,counts)
+colnames(histogram_fnRs) <- c("Seq.length", "counts")
+
+histogram_fnRs <- histogram_fnRs[order(histogram_fnRs[, 1], decreasing = TRUE), ]
+
+
+
+```
+
+
+```{r}
+sum(histogram_fnRs[histogram_fnRs[,1] < 250, 2])
+# head(histogram_fnRs[histogram_fnRs[,1] >= 200, ], 10)
+histogram_fnRs
+```
+
+
+
+
+```{r}
+#Check histogram matrix
+histogram_fnRs[order(histogram_fnRs[,1],decreasing = TRUE),] #Most sequences fall in expected sequence length
+
+
+# PLOT HISTOGRAM
+hist(reads@quality@quality@ranges@width, main="Forward length distribution", xlab="Sequence length", ylab="Raw reads")
+
+```
+
+```{r}
+## VIEW AND SAVE QUALITY PLOT FOR FW AND RV ##
+plotQualityProfile(fnFs[1:2])
+
+```
+
+```{r}
+plotQualityProfile(fnRs[1:2])
+```
+
+
+
+# Figaro
+
+```{r}
+wdir_path <- "/SERVER/davide/apps/pozzuoli"
+
+##FIGARO
+
+##Creates a new folder called 'figaro' inside our path to store reads after trimming for fígaro
+figFs <- file.path(wdir_path, "input_figaro", paste0(sample.names, "_R1.fastq.gz"))
+figRs <- file.path(wdir_path, "input_figaro", paste0(sample.names, "_R2.fastq.gz"))
+
+##TRIMMING AT 295 pb
+#inputFreads,outputFreads,inputRreads,outputRreads
+out.figaro <- filterAndTrim(fnFs, figFs, fnRs, figRs,
+                            truncLen=c(280, 250), # Valori "sicuri" per non perdere troppe read
+                            maxEE=c(2, 5),        # Molto permissivo - no filter here
+                            rm.phix=TRUE,
+                            compress=TRUE, 
+                            multithread=8)
+
+```
+
+
+
+
+
+```{r}
+##RUN FIGARO
+figaro <- system(("docker container run --rm -e AMPLICONLENGTH=466 -e FORWARDPRIMERLENGTH=17 -e REVERSEPRIMERLENGTH=21 -v /SERVER/davide/apps/pozzuoli/input_figaro:/data/input -v /SERVER/davide/apps/pozzuoli/output_figaro:/data/output zymoresearch/figaro"), intern=TRUE) 
+
+head(figaro)
+
+```
+
+```{r}
+# save.image()
+```
+
+```{r}
+### FILTER AND TRIM SEQUENCES ACCORDING TO FIGARO ####
+## Place filtered files in filtered/ subdirectory
+filtFs <- file.path(wdir_path, "filtered", paste0(sample.names, "_R1.fastq.gz"))
+filtRs <- file.path(wdir_path, "filtered", paste0(sample.names, "_R2.fastq.gz"))
+
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(279,245),
+                     maxEE=c(1,1), truncQ = 2, compress=TRUE, multithread=7)
+
+
+head(out)
+mean(out[,2]/out[,1])
+
+```
+
+
+
+# CUTADAPT
+
+```{r}
+
+#### IDENTIFY PRIMERS ####
+
+FWD <- "CCTACGGGNGGCWGCAG"  ## CHANGE ME to your forward primer sequence
+REV <- "GACTACHVGGGTATCTAATCC"  ## CHANGE ME to your reverse primer sequence
+
+## VERIFY PRESENCE AND ORENTATION OF PRIMERS ##
+allOrients <- function(primer) {
+  # Create all orientations of the input sequence
+  require(Biostrings)
+  dna <- DNAString(primer)  # The Biostrings works with DNAString objects rather than character vectors
+  orients <- c(Forward = dna, 
+               Complement = Biostrings::complement(dna), 
+               Reverse = reverse(dna),
+               RevComp = reverseComplement(dna))
+  return(sapply(orients, toString))  # Convert back to character vector
+}
+FWD.orients <- allOrients(FWD)
+REV.orients <- allOrients(REV)
+FWD.orients
+
+```
+
+```{r}
+REV.orients
+
+```
+
+```{r}
+## COUNT THE APPEARENCE AND ORIENTATION OF PRIMERS ##
+primerHits <- function(primer, fn) {
+  # Counts number of reads in which the primer is found
+  nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+  return(sum(nhits > 0))
+}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = filtFs[[1]]),
+      FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = filtRs[[1]]),
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = filtFs[[1]]),
+      REV.ReverseReads = sapply(REV.orients, primerHits, fn = filtRs[[1]]))
+```
+
+```{r}
+## RUN CUTADAPT
+cutadapt <- "/home/davide/miniforge3/envs/cutadapt/bin/cutadapt" #path to cutadapt 
+
+system2(cutadapt, args = c("--version")) # Run shell commands from R
+```
+
+Now, it is crucial to create a variable call path.cut where we will store the sequences after being processed by cutadapt. We will give these sequences the same names as filtFsand filtRs.
+
+```{r}
+##Create path to cutadapt sequences
+path.cut <- file.path(wdir_path, "cutadapt") 
+
+if(!dir.exists(path.cut)) dir.create(path.cut)
+
+fnFs.cut <- file.path(path.cut, basename(filtFs))
+fnRs.cut <- file.path(path.cut, basename(filtRs))
+
+
+##Produce arguments for cutadapt. rc function creates the reverse complementary of the provided sequence (FWD).  
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+
+# Trim FWD and the reverse-complement of REV off of R1 (forward reads)
+R1.flags <- paste0("-a", " ", "^",FWD,"...", REV.RC) 
+
+# Trim REV and the reverse-complement of FWD off of R2 (reverse reads)
+R2.flags <- paste0("-A"," ","^", REV, "...", FWD.RC)
+
+
+# Run Cutadapt
+
+for(i in seq_along(fnFs)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2,"-m", 1, # -n 2 required to remove FWD and REV from reads
+                             #-m 1 is required to remove empty sequences for plotting quality plots
+                             "--discard-untrimmed",
+                             "-j",0,#automatically detect number of cores
+                             "-o", fnFs.cut[i], "-p", fnRs.cut[i], # output files
+                             filtFs[i], filtRs[i],# input files
+                             "--report=minimal")) #Report minimal reports a summary
+
+}
+
+```
+
+Let’s see if cutadapt has properly removed the primers with primerHits
+
+```{r}
+
+#Check primer presence after cutadapt
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[1]]),
+      FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[1]]),
+      REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[1]]),
+      REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[1]]))
+
+```
+
+
+
+```{r}
+#### LEARN ERROR RATES ####
+errF <- learnErrors(fnFs.cut, multithread=9, verbose=1) #
+
+```
+
+```{r}
+errR <- learnErrors(fnRs.cut, multithread=9, verbose=1) #
+
+```
+
+
+```{r}
+save.image()
+```
+
+```{r}
+#Plot errors
+plotErrors(errF, nominalQ=TRUE)
+```
+
+```{r}
+plotErrors(errR, nominalQ=TRUE)
+```
+
+
+
+
+```{r}
+derepFs <- derepFastq(fnFs.cut, verbose=TRUE)
+derepRs <- derepFastq(fnRs.cut, verbose=TRUE)
+
+# Name the derep-class objects by the sample names
+names(derepFs) <- sample.names
+names(derepRs) <- sample.names
+```
+
+```{r}
+# Infer the ASVs using the error profiles learned in the previous steps
+
+# Sample inference
+dadaFs <- dada(derepFs, err=errF, multithread=9)
+dadaRs <- dada(derepRs, err=errR, multithread=9)
+
+```
+
+```{r}
+#Set sample names
+names(dadaFs) <- sample.names
+names(dadaRs) <- sample.names
+```
+
+
+```{r}
+save.image()
+```
+
+
+```{r}
+# Mate Pairing the reads
+
+# default values: minOverlap = 12, maxMismatch = 0
+
+mergers <- mergePairs(dadaFs, derepFs, 
+                       dadaRs, derepRs, 
+                       verbose=TRUE, maxMismatch = 0)
+
+## Remember that merged sequences are only output if the forward and reverse reads overlap by at least 12 bases, and are identical to each other in the overlap region. To increase the merged reads, try to modify the minOverlap lowering the value from 20 to 10 and the maxMismatch from 0 to 5 (check the function arguments within the manual *https://www.bioconductor.org/packages/release/bioc/manuals/dada2/man/dada2.pdf*).
+
+# Inspect the merger data.frame from the first sample
+head(mergers[[1]])
+
+```
+
+
+```{r}
+#Construct sequence table
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab) 
+
+```
+
+```{r}
+#Remove chimeras
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=9, verbose=TRUE)
+
+```
+
+```{r}
+save.image()
+
+```
+
+
+```{r}
+# Inspect distribution of sequence lengths
+table(nchar(getSequences(seqtab.nochim)))  #Number of ASV of each length
+
+```
+
+```{r}
+#Filter ASV length
+seqtab.nochim <- seqtab.nochim[,nchar(colnames(seqtab.nochim)) %in% seq(401,430)]
+
+```
+
+```{r}
+#Check number of sequences at each step
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
+# If processing a single sample, remove the sapply calls: e.g. replace sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+
+
+#Let's apply a mutate to get percentage, making it easier to analyze.
+track <- track %>% as.data.frame() %>% mutate(Perc.filtered=filtered*100/input,
+                                             Perc.denoisedF= denoisedF*100/filtered,
+                                             Perc.denoisedR= denoisedR*100/filtered,
+                                             Perc.merged= merged*100/filtered,
+                                             Perc.nonchim= nonchim*100/merged,
+                                             Perc.retained=nonchim*100/input
+                                             )
+
+head(track)
+
+```
+
+```{r}
+mean(track[,5]/track[,2])*100
+
+```
+
+```{r}
+
+# Assign Taxonomy. Point to where the silva database actually is
+
+taxa <- assignTaxonomy(seqtab.nochim, "/mnt/shared_dbs/silva_v138.2/silva_nr99_v138.2_toSpecies_trainset.fa.gz", multithread=9)
+
+taxa <- addSpecies(taxa, "/mnt/shared_dbs/silva_v138.2/silva_v138.2_assignSpecies.fa.gz")
+
+taxa.print <- taxa # Removing sequence rownames for display only
+rownames(taxa.print) <- NULL
+head(taxa.print)
+
+```
+
+```{r}
+save.image(file = "/SERVER/davide/apps/pozzuoli/complete_dada2_micro4all.RData")
+
+
+```
+
+```{r}
+load("/SERVER/davide/apps/pozzuoli/complete_dada2_micro4all.RData")
+```
+
+
+```{r}
+library(phyloseq)
+
+phy <- phyloseq(
+  otu_table(seqtab.nochim, taxa_are_rows = F),
+  tax_table(taxa)
+  # sample_data(as.data.frame(env))
+)
+
+dna <- Biostrings::DNAStringSet(taxa_names(phy))
+names(dna) <- taxa_names(phy)
+
+# Merge sequence object into the phyloseq object:
+phy <- merge_phyloseq(phy, dna)
+
+# Rename ASVs:
+taxa_names(phy) <- paste("ASV", 1:ntaxa(phy), sep = "_")
+taxa_names(phy)[1:3]
+
+# phy <- phyloseq(otu_table(otu_raw, taxa_are_rows = T),
+#                 tax_table(tax_raw),
+#                 sample_data(env))
+
+phy
+```
+
+```{r}
+
+saveRDS(phy, "./phyloseq_obj.rds")
+
+```
+
+```{r}
+```
+

@@ -1,0 +1,1391 @@
+---
+title: "R Notebook"
+---
+
+
+```{r}
+library(phyloseq)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(cowplot)
+library(vegan)
+library(readr)
+library(tidyverse)
+```
+
+
+```{r}
+prok <- readRDS("phyloseq_obj.rds")
+
+samples_to_remove <- c("AVE")
+prok <- prune_samples(!(sample_names(prok) %in% samples_to_remove), prok)
+prok
+```
+
+
+```{r}
+
+env <- read.csv("./ENV_geochemical_dataset.tsv", sep="\t", header = T, skip = 2)
+rownames(env) <- env$ID
+env <- as.data.frame(env)
+
+sample_data(prok) <- sample_data(env)
+env
+
+sample_data(prok)
+```
+
+
+
+
+```{r}
+
+microbiome::readcount(prok)
+
+## Normalizing the asv counts to the median sequencing depth
+prok_ndata <- transform_sample_counts(prok, function(x) ((x/sum(x))*median(microbiome::readcount(prok))))
+
+
+
+```
+
+```{r}
+## Normalizing the asv counts as relative abundances
+prok_ndata_ra <- transform_sample_counts(prok_ndata, function(x) x/sum(x) )
+
+```
+
+
+
+# ordering
+```{r}
+sample_order <- sample_data(prok_ndata)[order(sample_data(prok_ndata)$TDS)]$ID
+water_order <- c("Low T", "Intermediate T", "High T")
+```
+
+
+
+
+# Plot Bar
+
+```{r fig.width=20, fig.height=10}
+# Plot Bar
+
+
+# Phylum
+phylum <- tax_glom(prok_ndata, "Phylum")
+phylum.ra <- transform_sample_counts(phylum, function(x) x/sum(x) )
+
+# Plot Phylum Relative abundances
+plot <- phyloseq::plot_bar(phylum.ra, fill = "Phylum" ) 
+
+  
+plot + theme_bw()
+
+```
+
+
+```{r}
+
+N <- 10
+# SORT
+top10.phylum <- sort(taxa_sums(phylum.ra), decreasing = TRUE)[1:N]
+# GET
+phylum.top10.ra <- prune_taxa(names(top10.phylum), phylum.ra) 
+
+
+p <- plot_bar(phylum.top10.ra, fill = "Phylum", title="Top 10 Phylum" ) + 
+  facet_grid(~Water_classification, space="free", scale="free")+
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a")) +
+  ylab("Rel. Abundance") +
+  xlab("Sample") +
+  theme_bw(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1.0, hjust=1))
+
+p$data$Sample <- factor(p$data$Sample, levels = sample_order)
+p$data$Water_classification <- factor(p$data$Water_classification, levels = water_order)
+
+p
+
+```
+
+
+
+# Top 10 Class
+
+```{r fig.height=6, fig.width=10}
+
+# TOP 10 Class
+
+class <- tax_glom(prok_ndata, "Class")
+class.ra <- transform_sample_counts(class, function(x) x/sum(x) )
+
+N <- 10
+# SORT
+top10.class <- sort(taxa_sums(class.ra), decreasing = TRUE)[1:N]
+# GET
+class.top10.ra <- prune_taxa(names(top10.class), class.ra) 
+
+
+c <- plot_bar(class.top10.ra, fill = "Class") + #, title="Top 10 Class" ) + 
+  facet_grid(~Water_classification, space="free", scale="free")+
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a")) +
+  ylab("Rel. Abundance") +
+  xlab("Sample") +
+  theme_bw(base_size = 11) +
+  theme(
+    axis.text.x = element_blank(), #element_text(angle = 45, vjust = 1.0, hjust=1)
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank()
+    )
+
+c$data$Sample <- factor(c$data$Sample, levels = sample_order)
+c$data$Water_classification <- factor(c$data$Water_classification, levels = water_order)
+
+c
+
+```
+
+
+
+```{r fig.height=6, fig.width=10}
+# TOP 10 Order
+
+order <- tax_glom(prok_ndata, "Order")
+order.ra <- transform_sample_counts(order, function(x) x/sum(x) )
+
+N <- 10
+# SORT
+top10.order <- sort(taxa_sums(order.ra), decreasing = TRUE)[1:N]
+# GET
+order.top10.ra <- prune_taxa(names(top10.order), order.ra) 
+
+
+o <- plot_bar(order.top10.ra, fill = "Order") + #, title="Top 10 Order" ) + 
+  facet_grid(~Water_classification, space="free", scale="free")+
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a")) +
+  ylab("Rel. Abundance") +
+  xlab("Sample") +
+  theme_bw(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 1.0, hjust=1)
+  )
+
+o$data$Sample <- factor(o$data$Sample, levels = sample_order)
+o$data$Water_classification <- factor(o$data$Water_classification, levels = water_order)
+
+o
+
+```
+
+
+
+
+# Top 10 Family
+
+```{r fig.height=6, fig.width=9}
+# TOP 10 Family
+
+family <- tax_glom(prok_ndata, "Family")
+family.ra <- transform_sample_counts(family, function(x) x/sum(x) )
+
+N <- 10
+# SORT
+top10.family <- sort(taxa_sums(family.ra), decreasing = TRUE)[1:N]
+# GET
+family.top10.ra <- prune_taxa(names(top10.family), family.ra) 
+
+
+f <- plot_bar(family.top10.ra, fill = "Family", title="Top 10 Family" ) + 
+  facet_grid(~Water_classification, space="free", scale="free")+
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a")) +
+  ylab("Rel. Abundance") +
+  xlab("Sample") +
+  theme_bw(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1.0, hjust=1))
+
+f$data$Sample <- factor(f$data$Sample, levels = sample_order)
+f$data$Water_classification <- factor(f$data$Water_classification, levels = water_order)
+
+f
+
+```
+
+
+
+# Top 10 Genus
+
+```{r fig.height=6, fig.width=9}
+# TOP 10 Genus
+
+genus <- tax_glom(prok_ndata, "Genus")
+genus.ra <- transform_sample_counts(genus, function(x) x/sum(x) )
+
+N <- 10
+# SORT
+top10.genus <- sort(taxa_sums(genus.ra), decreasing = TRUE)[1:N]
+# GET
+genus.top10.ra <- prune_taxa(names(top10.genus), genus.ra) 
+
+
+g <- plot_bar(genus.top10.ra, fill = "Genus", title="Top 10 Genus" ) + 
+  facet_grid(~Water_classification, space="free", scale="free")+
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a")) +
+  ylab("Rel. Abundance") +
+  xlab("Sample") +
+  theme_bw(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1.0, hjust=1))
+
+g$data$Sample <- factor(g$data$Sample, levels = sample_order)
+g$data$Water_classification <- factor(g$data$Water_classification, levels = water_order)
+
+g
+
+```
+
+
+
+
+```{r fig.height=12, fig.width=9}
+
+plot_grid(c, o, ncol = 1, align = "v")
+
+ggsave("./plots/new_plot/multi_plotBar_ClassOrder.png", dpi=300, height = 12, width = 9, units = "in")
+
+```
+
+
+
+# Alpha Diversity ( Samples )
+
+```{r}
+
+# ── Prepara phyloseq raw ──────────────────────────────────────────────────────
+prok_alpha <- prune_species(speciesSums(prok) > 0, prok)
+
+# ── Arrotonda a interi ────────────────────────────────────────────────────────
+otu_table(prok_alpha) <- otu_table(
+  round(otu_table(prok_alpha)),
+  taxa_are_rows = taxa_are_rows(prok_alpha)
+)
+
+# ── Alpha diversity ───────────────────────────────────────────────────────────
+alpha_div <- estimate_richness(prok_alpha,
+                               measures = c(
+                                 "Observed",
+                                 "Shannon", 
+                                 "Simpson")) 
+ # %>%  # 
+  # mutate(Pielou = Shannon / log(Observed))
+
+alpha_div[sample_order,]
+
+```
+
+
+```{r}
+colnames(alpha_div)
+
+alpha_out <- alpha_div[sample_order, c("Observed", "Shannon", "Simpson")]
+alpha_out$sample_id <- rownames(alpha_out)
+alpha_out$Shannon <- round(alpha_out$Shannon, 2)
+alpha_out$Simpson <- round(alpha_out$Simpson, 2)
+
+alpha_out
+write.csv(alpha_out[, c("sample_id", "Observed", "Shannon", "Simpson")], "alpha_diversity_values.csv", row.names = FALSE)
+```
+
+
+
+
+
+# NMDS CON 2 FIT
+
+```{r}
+
+
+
+library(tidyverse)
+library(phyloseq)
+library(vegan)
+library(ggplot2)
+library(ggrepel)
+
+# =========================================================
+# 1. TOP10 FAMILY
+# =========================================================
+
+prok_global_nmds <- family.top10.ra
+
+# =========================================================
+# 2. SAMPLE ORDER
+# =========================================================
+
+rn_sorted <- sample_names(prok_global_nmds) %>%
+  sort()
+
+rn_sorted
+
+# =========================================================
+# 3. TOP10 FAMILY MATRIX
+# rows = samples
+# cols = taxa
+# =========================================================
+
+diversity <- prok_global_nmds %>%
+  psmelt() %>%
+  select(Family, Sample, Abundance) %>%
+  filter(
+    !Family %in% c(
+      "Unknown Family",
+      "Incertae Sedis"
+    )
+  ) %>%
+  pivot_wider(
+    names_from = Sample,
+    values_from = Abundance
+  ) %>%
+  as.data.frame()
+
+diversity[is.na(diversity)] <- 0
+
+rownames(diversity) <- diversity$Family
+
+diversity$Family <- NULL
+
+diversity <- diversity[, rn_sorted]
+
+# transpose:
+# rows = samples
+# cols = family
+
+taxa_matrix <- t(diversity) %>%
+  as.data.frame()
+
+taxa_matrix
+
+# =========================================================
+# 4. ENVIRONMENTAL VARIABLES
+# =========================================================
+
+full_cols <- c(
+  "ID","Water_classification",
+  "Depth","T","pH","TDS","NH4","HCO3",
+  "Na","K","Mg2","Ca2","F","Cl","NO2","Br",
+  "NO3","SO4","B","SiO2","TDP","COD",
+  "delta13C_TDIC","delta18O_H2O","delta2H_H2O","Li","Al","V","Cr","Mn",
+  "Fe","Co","Ni","Cu","Zn","As","Rb",
+  "Sr","Mo","Sb","Cs","Ba","Tl","Pb","U"
+)
+
+
+cols_NMDS_3 <- c(
+  "NH4", "HCO3", "K", "Mg2", "Ca2", "F", "Cl", "NO3", "SO4", "B", "SiO2", "COD", 
+  "Al", "V", "Mn", "Fe", "Ni", "Cu", "Zn", "As", "Mo", "Sb", "Tl", "Pb"  
+)
+
+cols <- cols_NMDS_3
+cols_fit <- cols_NMDS_3 
+
+new_env <- as(sample_data(prok), "data.frame")
+
+# =========================================================
+# 5. GEO MATRIX FOR NMDS
+# rows = samples
+# cols = geochemical variables
+# =========================================================
+
+geo_matrix <- new_env[rn_sorted, cols] %>%
+  as.data.frame()
+
+geo_matrix
+
+# remove all-zero variables if present
+
+geo_matrix <- geo_matrix[, colSums(geo_matrix, na.rm = TRUE) > 0]
+
+# =========================================================
+# 6. NMDS ON GEOCHEMISTRY
+# =========================================================
+
+set.seed(42)
+
+nmds <- metaMDS(
+  geo_matrix,
+  distance = "bray",
+  trymax = 100
+)
+
+nmds
+
+# =========================================================
+# 7. SAMPLE SCORES
+# =========================================================
+
+nmds_scores <- as.data.frame(
+  scores(nmds, display = "sites")
+)
+
+nmds_scores$SampleID <- rownames(nmds_scores)
+
+# =========================================================
+# 8. ADD METADATA
+# =========================================================
+
+meta_df <- new_env[rn_sorted, full_cols]
+
+nmds_scores <- cbind(
+  nmds_scores[rn_sorted, ],
+  meta_df[rn_sorted, ]
+)
+
+nmds_scores
+
+# =========================================================
+# 9. ENVFIT TAXA
+# =========================================================
+
+fit_taxa <- envfit(
+  nmds,
+  taxa_matrix,
+  permutations = 999
+)
+
+# =========================================================
+# 10. TAXA VECTORS
+# =========================================================
+
+taxa_vectors <- scores(
+  fit_taxa,
+  display = "vectors"
+)
+
+taxa_df <- as.data.frame(taxa_vectors)
+
+taxa_df$Taxon <- rownames(taxa_df)
+
+taxa_df$pval <- fit_taxa$vectors$pvals
+
+taxa_df$fontface <- ifelse(
+  taxa_df$pval < 0.05,
+  "bold",
+  "plain"
+)
+
+taxa_df$col <- ifelse(
+  taxa_df$pval < 0.05,
+  "gray20",
+  "grey80"
+)
+
+taxa_df
+
+# =========================================================
+# 11. ENVFIT GEOCHEMISTRY
+# =========================================================
+
+geo_fit_matrix <- new_env[rn_sorted, cols_fit] %>%
+  as.data.frame()
+
+fit_geo <- envfit(
+  nmds,
+  geo_fit_matrix,
+  permutations = 999,
+  na.rm = TRUE
+)
+
+# =========================================================
+# 12. GEO VECTORS
+# =========================================================
+
+geo_vectors <- scores(
+  fit_geo,
+  display = "vectors"
+)
+
+geo_df <- as.data.frame(geo_vectors)
+
+geo_df$Variable <- rownames(geo_df)
+
+geo_df$pval <- fit_geo$vectors$pvals
+
+geo_df$fontface <- ifelse(
+  geo_df$pval < 0.05,
+  "bold",
+  "plain"
+)
+
+geo_df$col <- ifelse(
+  geo_df$pval < 0.05,
+  "gray20",
+  "grey80"
+)
+
+geo_df
+
+
+```
+
+
+```{r}
+nmds$stress
+```
+
+
+```{r}
+geo_df[geo_df$pval < 0.05,]
+sum(geo_df$pval < 0.05)
+
+taxa_df[taxa_df$pval < 0.05,]
+sum(taxa_df$pval < 0.05)
+```
+
+
+
+```{r fig.height=8, fig.width=11}
+
+cols <- c("Low T" = "#33a02c", "Intermediate T" = "#d25b6a", "High T" = "#1f78b4")
+
+# '#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+#                                '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a"
+
+nmds_scores$Water_classification <- factor(
+  nmds_scores$Water_classification,
+  levels = c("Low T", "Intermediate T", "High T")
+)
+
+hulls <- nmds_scores %>%
+  group_by(Water_classification) %>%
+  slice(chull(NMDS1, NMDS2))
+
+p_points <- ggplot(nmds_scores) +
+
+  geom_polygon(
+    data = hulls,
+    aes(
+      NMDS1,
+      NMDS2,
+      fill = Water_classification,
+      group = Water_classification,
+      color = Water_classification
+    ),
+    alpha = 0.15,
+    linewidth = 0.5,
+    show.legend = FALSE
+  ) +
+
+  geom_point(
+    aes(
+      NMDS1,
+      NMDS2,
+      color = Water_classification
+    ),
+    size = 7
+  ) +
+
+  geom_text_repel(
+    aes(
+      NMDS1,
+      NMDS2,
+      label = ID
+    ),
+    size = 7
+  ) +
+
+  scale_color_manual(values = cols) +
+  scale_fill_manual(values = cols) +
+
+  theme_bw(base_size = 16) +
+
+  theme(
+    legend.text = element_text(size = 16),
+    legend.title = element_blank(),
+    legend.position = c(0.02, 0.98),
+    legend.justification = c(0, 1),
+    legend.background = element_rect(
+      fill = "white",
+      color = "black",
+      linewidth = 0.5
+    ),
+    legend.key = element_rect(fill = "white"),
+    axis.title.x = element_blank(),
+    panel.grid = element_blank()
+  )
+
+p_points #+ coord_cartesian(xlim = xlim, ylim = ylim)
+```
+
+
+```{r}
+scale_factor <- 0.55
+```
+
+
+```{r}
+p_taxa <- ggplot() +
+  geom_point(
+    data = nmds_scores,
+    aes(
+      NMDS1,
+      NMDS2,
+      color = "grey90"
+    ),
+    size = 6
+  ) +
+  geom_segment(
+    data = taxa_df,
+    aes(
+      x = 0,
+      y = 0,
+      xend = NMDS1 * scale_factor,
+      yend = NMDS2 * scale_factor,
+      color = col
+    ),
+    arrow = arrow(length = unit(0.1, "in")),
+    linewidth = 0.7
+  ) +
+  geom_text_repel(
+    data = taxa_df,
+    aes(
+      NMDS1 * scale_factor,
+      NMDS2 * scale_factor,
+      label = Taxon,
+      fontface = fontface
+    ),
+    size = 6,
+    color = "black",
+    max.overlaps = 100
+  ) +
+  scale_color_identity() +
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid = element_blank()
+  ) +
+  labs(
+    x = "NMDS1",
+    y = "NMDS2"
+  )
+
+p_taxa
+```
+
+
+
+```{r}
+p_geo <- ggplot() +
+  geom_point(
+    data = nmds_scores,
+    aes(
+      NMDS1,
+      NMDS2,
+      color = "grey90"
+    ),
+    size = 7
+  ) +
+  geom_segment(
+    data = geo_df,
+    aes(
+      x = 0,
+      y = 0,
+      xend = NMDS1 * scale_factor,
+      yend = NMDS2 * scale_factor,
+      color = col
+    ),
+    arrow = arrow(length = unit(0.1, "in")),
+    
+    linewidth = 0.7
+  ) +
+
+  geom_text_repel(
+    data = geo_df,
+    aes(
+      NMDS1 * scale_factor,
+      NMDS2 * scale_factor,
+      label = Variable,
+      fontface = fontface
+      # color = col
+    ),
+    size = 5,
+    max.overlaps = 100,
+    color="black"
+  ) +
+  scale_color_identity() +
+  theme_bw(base_size = 14) +
+
+  theme(
+    panel.grid = element_blank(),
+    axis.title.x = element_blank()
+  ) +
+
+  labs(
+    x = "NMDS1",
+    y = "NMDS2"
+  )
+
+p_geo
+```
+
+
+```{r}
+xlim <- range(c(
+  nmds_scores$NMDS1,
+  taxa_df$NMDS1 * scale_factor,
+  geo_df$NMDS1 * scale_factor
+
+))
+
+ylim <- range(c(
+  nmds_scores$NMDS2,
+  taxa_df$NMDS2 * scale_factor,
+  geo_df$NMDS2 * scale_factor
+
+))
+```
+
+
+```{r fig.height=18, fig.width=9}
+library(patchwork)
+
+p1 <- p_points +
+  coord_cartesian(xlim = xlim, ylim = ylim)
+
+p2 <- p_taxa +
+  coord_cartesian(xlim = xlim, ylim = ylim)
+
+p3 <- p_geo +
+  coord_cartesian(xlim = xlim, ylim = ylim)
+
+final_plot <- p1 / p3 / p2
+final_plot
+
+ggsave("plots/new_plot/multiPlot_NMDS_1.png", dpi=300, units = "in", height = 18, width = 11)
+
+
+```
+
+
+
+# PERMANOVA
+```{r}
+
+# Tabella ASV (campioni sulle righe) e metadati
+comm <- as(otu_table(prok_ndata_ra), "matrix")
+if (taxa_are_rows(prok_ndata_ra)) comm <- t(comm)
+
+meta <- data.frame(sample_data(prok_ndata_ra))[rownames(comm), ]
+
+meta$Water_classification <- factor(meta$Water_classification,
+                                    levels = c("Low T", "Intermediate T", "High T"))
+
+meta
+
+
+
+```
+
+
+```{r}
+
+# PERMANOVA su Bray-Curtis
+dist_comm <- vegdist(comm, method = "bray")
+dist_comm
+ 
+```
+
+```{r}
+
+# Permanova
+set.seed(42)
+adonis2(dist_comm ~ Water_classification, data = meta, permutations = 9999)
+
+```
+
+```{r}
+ 
+# Controllo delle dispersioni
+set.seed(42)
+permutest(betadisper(dist_comm, meta$Water_classification), permutations = 9999)
+
+```
+
+
+
+
+# Faprotax INPUT
+
+
+```{r}
+data.frame(t(otu_table(prok)))
+```
+
+
+
+```{r}
+
+input_fpt <- prok_ndata  
+
+phydf <- as.data.frame(tax_table(input_fpt))
+
+phydf[is.na(phydf)] <- ""
+
+# columns to paste together
+cols <- c( "Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species" )
+
+# create a new column `x` with the three columns collapsed together
+phydf$taxonomy <- apply( phydf[ , cols ] , 1 , function(i){ paste(na.omit(i), collapse = ";") } )
+
+# TMMnorm <- function(counts_matrix){
+#   # Main Reference: https://www.biostars.org/p/9465851/
+#   # Secondary References: https://www.biostars.org/p/9475236/
+#   # Samples as colnames
+#   # Features as rownames 
+#   
+#   y <- edgeR::DGEList(as.matrix(counts_matrix))
+#   y <- edgeR::calcNormFactors(y)
+#   
+#   return(as.data.frame(cpm(y, log=TRUE)))#, prior.count=2)))
+# }
+
+otu <- as.data.frame(otu_table(input_fpt))
+
+# with t_otu samples are in columns and ASVs in rows
+# tmm_otu <- TMMnorm(t_otu)
+# otu_to_merge <- tmm_otu
+
+t_otu <- as.data.frame(t(otu))
+otu_to_merge <- t_otu
+
+
+m <- merge(otu_to_merge, phydf[, "taxonomy", drop=F], by = 0, all.x = T )
+# m
+m$Row.names <- gsub('ASV', 'OTU', m$Row.names)
+colnames(m)[1] <- "OTU"
+# 
+rownames(m) <- m$OTU
+m$OTU <- rownames(m)
+rownames(m) <- NULL
+
+# colnames(otu_faprotax)[1] <- "OTU"
+n <- ncol(m)
+new.order = c(n, 1:(n-1))
+m <- m[, new.order]
+m <- m[, c("taxonomy", "OTU", rownames(sample_data(input_fpt)) )]
+m
+
+```
+
+
+```{r}
+write.table(m, "./faprotaxTableInput-prok_ndata.tsv", quote = F, sep = "\t", row.names = F, col.names = T)
+```
+
+
+
+# FAPROTAX HEATMAP
+
+```{r fig.height=12, fig.width=5}
+
+library(pheatmap)
+library(ComplexHeatmap)
+
+
+faprotax <- as.matrix(read.csv("./faprotax_results_prok-ndata/results.txt", 
+                     sep="\t", row.names = 1))
+
+faprotax <- faprotax[which(rowSums(faprotax) > 0), ]
+faprotax <- faprotax[, which(colSums(faprotax) > 0)]
+
+faprotax <- faprotax[, c("LOP","SAM","ESP","COS","CAR","TOR","TPUT","PIS","NER","FSCO")]
+
+
+
+draw(ComplexHeatmap::pheatmap(faprotax, scale="row", 
+                         # annotation_col = annotation_col,
+                         # annotation_colors = ann_colors,
+                         cluster_cols = T,
+                         legend = TRUE,
+                         heatmap_legend_param = list(
+                           legend_direction = "horizontal",
+                           annotation_direction = "horizontal",
+                           title = "Row-scaled abundance",
+                           # annotation_legend_side = "bottom",
+                           legend_side = "right"),
+                         main = "Faprotax Metabolism"), 
+     annotation_legend_side = "left",
+     heatmap_legend_side = "bottom")
+
+
+```
+
+
+
+
+# Faprotax - Nitrogen
+
+```{r fig.width=6, fig.height=5}
+
+nitrogen_cycle <- c(
+  "anammox",
+  "nitrate_denitrification",
+  "nitrite_denitrification",
+  "nitrous_oxide_denitrification",
+  "denitrification",
+  "nitrogen_fixation",
+  "nitrate_ammonification",
+  "nitrite_ammonification",
+  "nitrite_respiration",
+  "nitrate_respiration",
+  "nitrate_reduction",
+  "nitrogen_respiration"
+)
+
+nitro <- subset(faprotax, rownames(faprotax) %in% nitrogen_cycle)
+
+# nitro <- nitro[which(rowSums(nitro) > 0),]
+# nitro <- nitro[, which(colSums(nitro) > 0)]
+
+nitro[is.nan(nitro)] <- 0
+
+
+# png(file="faprotax_nitrogen.png", width=6,height=5,units="in",res=300)
+fnitro <- ComplexHeatmap::pheatmap(nitro, scale = "row", cluster_cols = F, 
+                         # annotation_col = annotation_col, 
+                         # annotation_colors = ann_colors,
+                         legend = TRUE,
+                         heatmap_legend_param = list(
+                           title = "Row-scaled abundance",
+                           annotation_legend_side = "bottom",
+                           legend_side = "top"),
+                         main = "Nitrogen Metabolism"
+                         )
+
+# draw(fnitro)
+# dev.off()
+fnitro
+
+
+```
+
+
+# Faprotax - Sulfur
+
+```{r fig.width=8, fig.height=4.5}
+# Sulfur Cycle
+
+sulfur_cycle <- c("sulfate_respiration",
+  "sulfur_respiration",
+  "sulfite_respiration",
+  "thiosulfate_respiration",
+  "respiration_of_sulfur_compounds",
+  "dark_sulfide_oxidation",
+  "dark_sulfur_oxidation",
+  "dark_thiosulfate_oxidation",
+  "dark_oxidation_of_sulfur_compounds",
+  "anoxygenic_photoautotrophy_S_oxidizing")
+
+
+sulfur <- subset(faprotax, rownames(faprotax) %in% sulfur_cycle)
+
+
+# png(file="faprotax_sulfur.png", width=8,height=4.5,units="in",res=300)
+fsulf <- ComplexHeatmap::pheatmap(sulfur, scale="row", cluster_cols = F, 
+                         # annotation_col = annotation_col, annotation_colors = ann_colors,
+                         legend = TRUE,
+                         heatmap_legend_param = list(
+                           title = "Row-scaled abundance",
+                           annotation_legend_side = "bottom",
+                           legend_side = "top"),
+                         main = "Sulfur Metabolism"
+                         )
+
+# draw(fsulf)
+# dev.off()
+
+fsulf
+
+```
+
+
+
+```{r}
+pathogens <- c(
+  "human_pathogens_septicemia",
+  "human_pathogens_pneumonia",
+  "human_pathogens_nosocomia",
+  "human_pathogens_meningitis",
+  "human_pathogens_all",
+  "plant_pathogen",
+  "invertebrate_parasites",
+  "intracellular_parasites",
+  "predatory_or_exoparasitic"
+)
+
+
+patho <- subset(faprotax, rownames(faprotax) %in% pathogens)
+
+
+# png(file="faprotax_sulfur.png", width=8,height=4.5,units="in",res=300)
+pathoplot <- ComplexHeatmap::pheatmap(patho, scale="row", cluster_cols = F, 
+                         # annotation_col = annotation_col, annotation_colors = ann_colors,
+                         legend = TRUE,
+                         heatmap_legend_param = list(
+                           title = "Row-scaled abundance",
+                           annotation_legend_side = "bottom",
+                           legend_side = "top"),
+                         main = "Pathogens"
+                         )
+
+# draw(pathoplot)
+# dev.off()
+
+pathoplot
+
+```
+
+
+
+
+# Faprotax - Carbon
+
+```{r fig.width=7, fig.height=6}
+# Carbon Cycle
+
+# carbon_cycle <- c("methanotrophy",
+#   "methanol_oxidation",
+#   "methylotrophy",
+#   "chitinolysis",
+#   "cellulolysis",
+#   "xylanolysis",
+#   "ligninolysis",
+#   "fermentation",
+#   "aerobic_chemoheterotrophy",
+#   "chemoheterotrophy",
+#   "reductive_acetogenesis",
+#   "oil_bioremediation",
+#   "aromatic_hydrocarbon_degradation",
+#   "aromatic_compound_degradation",
+#   "aliphatic_non_methane_hydrocarbon_degradation",
+#   "hydrocarbon_degradation",
+#   "plastic_degradation",
+#   "photoheterotrophy",
+#   "aerobic_anoxygenic_phototrophy",
+#   "phototrophy",
+#   "photoautotrophy",
+#   "oxygenic_photoautotrophy",
+#   "anoxygenic_photoautotrophy",
+#   "photosynthetic_cyanobacteria",
+#   "chloroplasts")
+
+carbon_cycle <- c(
+  "methanotrophy",
+  "methanol_oxidation",
+  "methylotrophy",
+  "chitinolysis",
+  "cellulolysis",
+  "xylanolysis",
+  "ligninolysis",
+  "fermentation",
+  "aerobic_chemoheterotrophy",
+  "chemoheterotrophy",
+  "reductive_acetogenesis",
+  "dark_hydrogen_oxidation"
+)
+
+carbon <- subset(faprotax, rownames(faprotax) %in% carbon_cycle)
+
+
+
+# png(file="faprotax_carbon.png", width=7,height=6,units="in",res=300)
+fcarb <- ComplexHeatmap::pheatmap(carbon, scale="row", cluster_cols = F, 
+                         # annotation_col = annotation_col, 
+                         # annotation_colors = ann_colors,
+                         legend = TRUE,
+                         heatmap_legend_param = list(
+                           title = "Row-scaled abundance",
+                           annotation_legend_side = "bottom",
+                           legend_side = "top"),
+                         main = "Carbon Metabolism")
+
+# draw(fcarb)
+# dev.off()
+fcarb
+
+
+
+
+```
+
+
+
+# Carbon Plot Bar
+
+
+```{r}
+melted_metadata <- psmelt(prok_ndata)
+melted_metadata <- melted_metadata[, c("Sample", "Water_classification")]
+melted_metadata <- unique(melted_metadata)
+rownames(melted_metadata) <- NULL
+melted_metadata
+
+```
+
+
+
+```{r fig.height=4, fig.width=10}
+carbon_df <- as.data.frame(carbon)
+carbon_df$carbon_metab <- rownames(carbon_df)  # aggiunge una colonna con i nomi di riga
+
+carbon_melt <- melt(carbon_df, id.vars = "carbon_metab", value.name = "Abundance", na.rm = FALSE)
+
+colnames(carbon_melt) <- c("carbon_metab", "Sample", "Abundance")
+
+# Unisci questa informazione al melt
+carbon_melt <- left_join(
+  carbon_melt,
+  melted_metadata,
+  by = "Sample"
+)
+
+carbon_melt
+
+carbon_melt$Water_classification <- factor(carbon_melt$Water_classification, levels = water_order)
+
+# ordering by TDS desc
+carbon_melt$Sample <- factor(carbon_melt$Sample, levels = sample_order)
+
+
+
+plotbar_CARBON <- ggplot(carbon_melt, aes(x = Sample, y = Abundance, fill = carbon_metab)) +
+  geom_bar(stat = "identity", position = "stack", color="black") +
+  theme_bw() +
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a",
+                               "#FFEF33", "#A65628")) +
+  facet_grid(~Water_classification, scales = "free_x", space = "free_x",
+             labeller = labeller(Water_classification = label_wrap_gen(width = 10))) +  
+  labs(x = "Sample", y = "FAPROTAX Functional Abundance", fill = "Carbon metabolism") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        panel.grid = element_blank(),
+        # strip.text = element_text(face = "bold"),
+        axis.text.x.bottom = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank()
+    )
+
+# Estrai solo la legenda
+# carbon_legend <- get_legend(plotbar_CARBON +
+#                               theme(legend.position = "right",
+#                                     legend.title = element_text(size = 10),
+#                                     legend.text = element_text(size = 9)))
+
+plotbar_CARBON
+# ggsave(plot = plotbar_CARBON, filename = "plotbar_CARBON.svg", dpi=300, width=3.5, height=3.6)
+
+# Mostra solo la legenda
+# plot_grid(carbon_legend)
+# ggsave(filename = "plotbar_CARBON_legend.svg", dpi=300, width=3.5, height=3.6)
+
+
+
+
+
+```
+
+
+
+```{r fig.height=4, fig.width=10}
+nitrogen_df <- as.data.frame(nitro)
+nitrogen_df$nitrogen_metab <- rownames(nitrogen_df)  # aggiunge una colonna con i nomi di riga
+
+nitrogen_melt <- melt(nitrogen_df, id.vars = "nitrogen_metab", value.name = "Abundance", na.rm = FALSE)
+
+colnames(nitrogen_melt) <- c("nitrogen_metab", "Sample", "Abundance")
+
+# Unisci questa informazione al melt
+nitrogen_melt <- left_join(
+  nitrogen_melt,
+  melted_metadata,
+  by = "Sample"
+)
+
+nitrogen_melt
+
+nitrogen_melt$Water_classification <- factor(nitrogen_melt$Water_classification, levels = water_order)
+
+nitrogen_melt$Sample <- factor(nitrogen_melt$Sample, levels = sample_order)
+
+
+plotbar_nitrogen <- ggplot(nitrogen_melt, aes(x = Sample, y = Abundance, fill = nitrogen_metab)) +
+  geom_bar(stat = "identity", position = "stack", color="black") +
+  theme_bw() +
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a",
+                               "#FFEF33", "#A65628")) +
+  facet_grid(~Water_classification, scales = "free", space = "free",
+             labeller = labeller(Water_classification = label_wrap_gen(width = 10))) +
+  labs(x = "Sample", y = "FAPROTAX Functional Abundance", fill = "nitrogen metabolism") +
+  theme(
+    # axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        panel.grid = element_blank(),
+        axis.text.x.bottom = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank())
+
+# Estrai solo la legenda
+# nitrogen_legend <- get_legend(plotbar_nitrogen +
+#                               theme(legend.position = "right",
+#                                     legend.title = element_text(size = 10),
+#                                     legend.text = element_text(size = 9)))
+
+plotbar_nitrogen
+# ggsave(plot = plotbar_nitrogen, filename = "plotbar_nitrogen.svg", dpi=300, width=3.5, height=3.6)
+
+# Mostra solo la legenda
+# plot_grid(nitrogen_legend)
+# ggsave(filename = "plotbar_nitrogen_legend.svg", dpi=300, width=3.5, height=3.6)
+
+
+
+
+
+```
+
+
+
+```{r fig.height=4, fig.width=10}
+
+sulfur_df <- as.data.frame(sulfur)
+sulfur_df$sulfur_metab <- rownames(sulfur_df)  # aggiunge una colonna con i nomi di riga
+
+sulfur_melt <- melt(sulfur_df, id.vars = "sulfur_metab", value.name = "Abundance", na.rm = FALSE)
+
+colnames(sulfur_melt) <- c("sulfur_metab", "Sample", "Abundance")
+
+# Unisci questa informazione al melt
+sulfur_melt <- left_join(
+  sulfur_melt,
+  melted_metadata,
+  by = "Sample"
+)
+
+sulfur_melt
+
+sulfur_melt$Water_classification <- factor(sulfur_melt$Water_classification, levels = water_order)
+sulfur_melt$Sample <- factor(sulfur_melt$Sample, levels = sample_order)
+
+
+
+plotbar_sulfur <- ggplot(sulfur_melt, aes(x = Sample, y = Abundance, fill = sulfur_metab)) +
+  geom_bar(stat = "identity", position = "stack", color="black") +
+  theme_bw() +
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a",
+                               "#FFEF33", "#A65628")) +
+  facet_grid(~Water_classification, scales = "free", space = "free",
+             labeller = labeller(Water_classification = label_wrap_gen(width = 10))) +  
+  labs(x = "Sample", y = "FAPROTAX Functional Abundance", fill = "sulfur metabolism") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        panel.grid = element_blank())
+
+# Estrai solo la legenda
+# sulfur_legend <- get_legend(plotbar_sulfur +
+#                               theme(legend.position = "right",
+#                                     legend.title = element_text(size = 10),
+#                                     legend.text = element_text(size = 9)))
+
+plotbar_sulfur
+# ggsave(plot = plotbar_sulfur, filename = "plotbar_sulfur.svg", dpi=300, width=3.5, height=3.6)
+
+# Mostra solo la legenda
+# plot_grid(sulfur_legend)
+# ggsave(filename = "plotbar_sulfur_legend.svg", dpi=300, width=3.5, height=3.6)
+
+
+
+
+
+```
+
+
+```{r fig.height=12, fig.width=11}
+
+plot_grid(plotbar_CARBON, plotbar_nitrogen, plotbar_sulfur, ncol = 1, align = "v")
+
+ggsave("./plots/new_plot/Faprotax_multi_plotbar.png", dpi=300, height = 12, width = 11, units = "in")
+
+```
+
+
+```{r}
+pathogens_df <- as.data.frame(patho)
+pathogens_df$pathogens_metab <- rownames(pathogens_df)  # aggiunge una colonna con i nomi di riga
+
+pathogens_melt <- melt(pathogens_df, id.vars = "pathogens_metab", value.name = "Abundance", na.rm = FALSE)
+
+colnames(pathogens_melt) <- c("pathogens_metab", "Sample", "Abundance")
+
+# Unisci questa informazione al melt
+pathogens_melt <- left_join(
+  pathogens_melt,
+  melted_metadata,
+  by = "Sample"
+)
+
+pathogens_melt
+
+pathogens_melt$Water_classification <- factor(pathogens_melt$Water_classification, levels = water_order)
+
+
+pathogens_melt$Sample <- factor(pathogens_melt$Sample, levels = c("LOP","SAM","ESP","COS","CAR","TOR","TPUT","PIS","NER","FSCO"))
+
+
+
+plotbar_pathogens <- ggplot(pathogens_melt, aes(x = Sample, y = Abundance, fill = pathogens_metab)) +
+  geom_bar(stat = "identity", position = "stack", color="black", size = 0.3) +
+  theme_bw() +
+  scale_fill_manual(values = c('#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99',
+                               '#d25b6a', '#fbbd75', '#ff8f00', '#cab2d6', "#6a3d9a",
+                               "#FFEF33", "#A65628")) +
+  facet_grid(~Water_classification, scales = "free", space = "free",
+             labeller = labeller(Water_classification = label_wrap_gen(width = 10))) +  
+  labs(x = "Sample", y = "FAPROTAX Functional Abundance", fill = "pathogens metabolism") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "right",
+        panel.grid = element_blank(),
+        # strip.text = element_text(face = "bold"),
+        # axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank())
+
+# Estrai solo la legenda
+# pathogens_legend <- get_legend(plotbar_pathogens +
+#                               theme(legend.position = "right",
+#                                     legend.title = element_text(size = 10),
+#                                     legend.text = element_text(size = 9)))
+
+plotbar_pathogens
+# ggsave(plot = plotbar_pathogens, filename = "plotbar_pathogens.svg", dpi=300, width=3.5, height=3.6)
+
+# Mostra solo la legenda
+# plot_grid(pathogens_legend)
+# ggsave(filename = "plotbar_pathogens_legend.svg", dpi=300, width=3.5, height=3.6)
+
+
+```
+
+
+```{r}
+```
+
